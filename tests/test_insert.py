@@ -43,13 +43,10 @@ class TestTextInserter:
         """Mock clipboard operations."""
         with patch("vox.insert.pyperclip") as mock_clip:
             mock_clip.paste.return_value = "original clipboard"
-            with patch("vox.insert.subprocess") as mock_subprocess:
-                mock_subprocess.run.return_value = MagicMock()
-                with patch("vox.insert.time"):
-                    yield {
-                        "pyperclip": mock_clip,
-                        "subprocess": mock_subprocess,
-                    }
+            with patch("vox.insert.time"):
+                yield {
+                    "pyperclip": mock_clip,
+                }
 
     def test_init_with_accessibility(self, mock_accessibility_enabled) -> None:
         """Should use accessibility when available."""
@@ -126,16 +123,24 @@ class TestTextInserter:
     def test_insert_clipboard_sends_paste(
         self, mock_accessibility_disabled, mock_clipboard
     ) -> None:
-        """Should send Cmd+V via AppleScript."""
-        from vox.insert import TextInserter
+        """Should send Cmd+V via Quartz CGEvent."""
+        import sys
 
-        inserter = TextInserter()
-        inserter.insert("test")
+        mock_quartz = MagicMock()
+        mock_quartz.CGEventCreateKeyboardEvent.return_value = MagicMock()
+        mock_quartz.kCGEventFlagMaskCommand = 0x100000
+        mock_quartz.kCGHIDEventTap = 0
 
-        mock_clipboard["subprocess"].run.assert_called_once()
-        call_args = mock_clipboard["subprocess"].run.call_args[0][0]
-        assert "osascript" in call_args
-        assert 'keystroke "v" using command down' in call_args[-1]
+        with patch.dict(sys.modules, {"Quartz": mock_quartz}):
+            from vox.insert import TextInserter
+
+            inserter = TextInserter()
+            inserter.insert("test")
+
+            # Should have created key down and key up events
+            assert mock_quartz.CGEventCreateKeyboardEvent.call_count == 2
+            # Should have posted both events
+            assert mock_quartz.CGEventPost.call_count == 2
 
     def test_check_accessibility_static(self, mock_accessibility_enabled) -> None:
         """Static method should check accessibility status."""
@@ -179,14 +184,18 @@ class TestTextInserter:
         self, mock_accessibility_disabled, mock_clipboard
     ) -> None:
         """Should handle exceptions from clipboard operations."""
-        from vox.insert import TextInserter
+        import sys
 
-        mock_clipboard["subprocess"].run.side_effect = Exception("Paste failed")
+        mock_quartz = MagicMock()
+        mock_quartz.CGEventCreateKeyboardEvent.side_effect = Exception("Quartz failed")
 
-        inserter = TextInserter()
-        result = inserter.insert("test")
+        with patch.dict(sys.modules, {"Quartz": mock_quartz}):
+            from vox.insert import TextInserter
 
-        assert result is False
+            inserter = TextInserter()
+            result = inserter.insert("test")
+
+            assert result is False
 
     def test_insert_clipboard_empty_original(
         self, mock_accessibility_disabled, mock_clipboard

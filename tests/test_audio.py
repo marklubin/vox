@@ -166,13 +166,15 @@ class TestAudioCapture:
         # InputStream should only be created once
         assert mock_sounddevice.InputStream.call_count == 1
 
-    def test_callback_handles_status(self, capsys) -> None:
-        """Callback should print status messages."""
+    def test_callback_handles_status(self, caplog) -> None:
+        """Callback should log status messages."""
+        import logging
+
         capture = AudioCapture()
 
         # Simulate callback with status
         fake_audio = np.zeros((1000, 1), dtype=np.float32)
-        capture._callback(fake_audio, 1000, None, "input overflow")
+        with caplog.at_level(logging.WARNING):
+            capture._callback(fake_audio, 1000, None, "input overflow")
 
-        captured = capsys.readouterr()
-        assert "Audio status: input overflow" in captured.out
+        assert "input overflow" in caplog.text
