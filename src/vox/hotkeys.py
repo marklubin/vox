@@ -20,7 +20,7 @@ class RecordingMode(Enum):
 
 
 class HotkeyManager:
-    """Manages hotkeys for controlling dictation.
+    """Manages hotkeys for controlling di   ctation.
 
     Supports two modes:
     - Latch: Hold Option key to record, release to stop
@@ -82,11 +82,6 @@ class HotkeyManager:
 
     def _on_press(self, key: keyboard.Key | keyboard.KeyCode | None) -> None:
         """Handle key press events."""
-        # Escape always cancels
-        if key == keyboard.Key.esc and self.recording:
-            self._cancel()
-            return
-
         # Option key handling
         if key == keyboard.Key.alt or key == keyboard.Key.alt_l or key == keyboard.Key.alt_r:
             if not self.option_pressed:
