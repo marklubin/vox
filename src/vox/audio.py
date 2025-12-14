@@ -28,26 +28,32 @@ class AudioCapture:
 
     Audio is accumulated in a buffer and emitted as chunks when enough samples
     have been collected. This ensures no data loss between chunks.
+
+    For true real-time streaming, use streaming_mode=True to emit raw blocks
+    without accumulation (lower latency but smaller blocks).
     """
 
     def __init__(
         self,
         sample_rate: int = SAMPLE_RATE,
         chunk_duration: float = CHUNK_DURATION,
+        streaming_mode: bool = False,
     ) -> None:
         self.sample_rate = sample_rate
         self.chunk_duration = chunk_duration
         self.chunk_samples = int(sample_rate * chunk_duration)
+        self.streaming_mode = streaming_mode
         self.audio_queue: queue.Queue[NDArray[np.float32]] = queue.Queue()
         self.buffer: list[NDArray[np.float32]] = []
         self.stream: sd.InputStream | None = None
         self._callback_count = 0
 
         log.debug(
-            "AudioCapture initialized: sample_rate=%d, chunk_duration=%.1fs, chunk_samples=%d",
+            "AudioCapture initialized: sample_rate=%d, chunk_duration=%.1fs, chunk_samples=%d, streaming_mode=%s",
             sample_rate,
             chunk_duration,
             self.chunk_samples,
+            streaming_mode,
         )
 
     def _callback(
@@ -57,13 +63,22 @@ class AudioCapture:
         time: sd.CallbackFlags,
         status: sd.CallbackFlags,
     ) -> None:
-        """Called for each audio block - accumulates into chunks."""
+        """Called for each audio block - accumulates into chunks or streams directly."""
         self._callback_count += 1
         if status:
             log.warning("Audio callback status: %s (callback #%d)", status, self._callback_count)
 
-        # Flatten and append copy of audio data to buffer (always store as 1D)
-        self.buffer.append(indata.copy().flatten())
+        # Flatten audio data (always store as 1D)
+        audio_block = indata.copy().flatten()
+
+        if self.streaming_mode:
+            # Streaming mode: emit raw blocks immediately (no accumulation)
+            # Audio is sent to Deepgram in real-time, no need to buffer
+            self.audio_queue.put(audio_block)
+            return
+
+        # Batch mode: accumulate into chunks
+        self.buffer.append(audio_block)
 
         # Calculate total samples in buffer
         total_samples = sum(len(b) for b in self.buffer)
