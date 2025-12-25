@@ -37,35 +37,6 @@ def mock_sounddevice():
 
 
 @pytest.fixture
-def mock_model():
-    """Mock the Moonshine model."""
-    with patch("vox.transcribe.MoonshineForConditionalGeneration") as mock:
-        mock_instance = MagicMock()
-        mock.from_pretrained.return_value = mock_instance
-        yield mock
-
-
-@pytest.fixture
-def mock_processor():
-    """Mock the AutoProcessor."""
-    with patch("vox.transcribe.AutoProcessor") as mock:
-        mock_instance = MagicMock()
-        mock_instance.return_value = {"input_features": MagicMock()}
-        mock_instance.batch_decode.return_value = ["  hello world  "]
-        mock.from_pretrained.return_value = mock_instance
-        yield mock
-
-
-@pytest.fixture
-def mock_torch():
-    """Mock torch module for device detection."""
-    with patch("vox.transcribe.torch") as mock:
-        mock.backends.mps.is_available.return_value = False
-        mock.device.return_value = MagicMock()
-        yield mock
-
-
-@pytest.fixture
 def mock_accessibility():
     """Mock macOS Accessibility API."""
     with patch("vox.insert.AXIsProcessTrusted") as mock_trusted:

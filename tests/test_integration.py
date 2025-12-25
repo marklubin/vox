@@ -150,69 +150,72 @@ class TestAppLifecycle:
 
     def test_app_initialization(self) -> None:
         """App should initialize with correct defaults."""
-        with patch("vox.app.MoonshineTranscriber"):
-            with patch("vox.app.AudioCapture"):
-                with patch("vox.app.TextInserter"):
-                    with patch("vox.app.HotkeyManager"):
-                        from vox.app import VoxApp
+        with patch("vox.app.get_transcriber"):
+            with patch("vox.app.is_streaming_backend", return_value=False):
+                with patch("vox.app.AudioCapture"):
+                    with patch("vox.app.TextInserter"):
+                        with patch("vox.app.HotkeyManager"):
+                            from vox.app import VoxApp
 
-                        app = VoxApp()
+                            app = VoxApp()
 
-                        assert app.recording is False
-                        assert app.transcription_thread is None
-                        assert "Ready" in app.status_item.title
+                            assert app.recording is False
+                            assert app.transcription_thread is None
+                            assert "Ready" in app.status_item.title
 
     def test_start_stop_recording(self) -> None:
         """Start and stop recording should update state correctly."""
-        with patch("vox.app.MoonshineTranscriber") as mock_transcriber:
-            with patch("vox.app.AudioCapture") as mock_audio:
-                with patch("vox.app.TextInserter") as mock_inserter:
-                    with patch("vox.app.HotkeyManager") as mock_hotkeys:
-                        from vox.app import VoxApp
-                        from vox.hotkeys import RecordingMode
+        with patch("vox.app.get_transcriber") as mock_get_transcriber:
+            with patch("vox.app.is_streaming_backend", return_value=False):
+                with patch("vox.app.AudioCapture") as mock_audio:
+                    with patch("vox.app.TextInserter") as mock_inserter:
+                        with patch("vox.app.HotkeyManager") as mock_hotkeys:
+                            from vox.app import VoxApp
+                            from vox.hotkeys import RecordingMode
 
-                        app = VoxApp()
-                        app._init_components()
+                            app = VoxApp()
+                            app._init_components()
 
-                        # Set up hotkey manager mock
-                        app.hotkey_manager.current_mode = RecordingMode.LATCH
+                            # Set up hotkey manager mock
+                            app.hotkey_manager.current_mode = RecordingMode.LATCH
 
-                        # Start recording
-                        app.start_recording()
+                            # Start recording
+                            app.start_recording()
 
-                        assert app.recording is True
-                        assert "Recording" in app.status_item.title
-                        mock_audio.return_value.start.assert_called()
+                            assert app.recording is True
+                            assert "Recording" in app.status_item.title
+                            mock_audio.return_value.start.assert_called()
 
-                        # Stop recording
-                        app.stop_recording()
+                            # Stop recording
+                            app.stop_recording()
 
-                        assert app.recording is False
-                        mock_audio.return_value.stop.assert_called()
+                            assert app.recording is False
+                            mock_audio.return_value.stop.assert_called()
 
     def test_cancel_recording(self) -> None:
         """Cancel should stop without processing remaining audio."""
-        with patch("vox.app.MoonshineTranscriber") as mock_transcriber:
-            with patch("vox.app.AudioCapture") as mock_audio:
-                with patch("vox.app.TextInserter") as mock_inserter:
-                    with patch("vox.app.HotkeyManager") as mock_hotkeys:
-                        from vox.app import VoxApp
-                        from vox.hotkeys import RecordingMode
+        with patch("vox.app.get_transcriber") as mock_get_transcriber:
+            with patch("vox.app.is_streaming_backend", return_value=False):
+                with patch("vox.app.AudioCapture") as mock_audio:
+                    with patch("vox.app.TextInserter") as mock_inserter:
+                        with patch("vox.app.HotkeyManager") as mock_hotkeys:
+                            from vox.app import VoxApp
+                            from vox.hotkeys import RecordingMode
 
-                        # Setup mocks - make audio capture not return remaining audio
-                        mock_audio.return_value.stop.return_value = None
-                        mock_audio.return_value.get_chunk.return_value = None
+                            # Setup mocks - make audio capture not return remaining audio
+                            mock_audio.return_value.stop.return_value = None
+                            mock_audio.return_value.get_chunk.return_value = None
 
-                        app = VoxApp()
-                        app._init_components()
+                            app = VoxApp()
+                            app._init_components()
 
-                        app.hotkey_manager.current_mode = RecordingMode.TOGGLE
-                        app.start_recording()
+                            app.hotkey_manager.current_mode = RecordingMode.TOGGLE
+                            app.start_recording()
 
-                        # Immediately cancel (before any chunks are processed)
-                        app.cancel_recording()
+                            # Immediately cancel (before any chunks are processed)
+                            app.cancel_recording()
 
-                        assert app.recording is False
-                        assert "Cancelled" in app.status_item.title
-                        # Stop was called on audio capture
-                        mock_audio.return_value.stop.assert_called()
+                            assert app.recording is False
+                            assert "Cancelled" in app.status_item.title
+                            # Stop was called on audio capture
+                            mock_audio.return_value.stop.assert_called()

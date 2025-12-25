@@ -56,8 +56,7 @@ AUDIO_DTYPE = "float32"
 BLOCK_SIZE = 1024  # samples per callback
 
 # Transcription settings
-MODEL_NAME = "UsefulSensors/moonshine-base"
-MAX_NEW_TOKENS = 256
+# Transcriber backend is selected via VOX_TRANSCRIBER env var (see transcribe.py)
 
 # Hotkey settings
 HOLD_THRESHOLD = 0.25  # seconds - distinguish tap from hold

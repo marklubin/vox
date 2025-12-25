@@ -229,8 +229,9 @@ class TextInserter:
             Quartz.CGEventPost(Quartz.kCGHIDEventTap, event_down)
             Quartz.CGEventPost(Quartz.kCGHIDEventTap, event_up)
 
-            # Wait a bit for paste to complete
-            time.sleep(0.1)
+            # Wait for paste to complete before restoring clipboard
+            # This delay is critical - too short and we restore before the paste happens
+            time.sleep(0.25)
             log.debug("Paste command sent")
 
             # Restore original clipboard
