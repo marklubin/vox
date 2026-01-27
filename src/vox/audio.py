@@ -23,6 +23,34 @@ if TYPE_CHECKING:
 log = get_logger("audio")
 
 
+def _get_default_device() -> int | str | None:
+    """Get the best default input device for the current platform.
+
+    On Linux, the 'default' device often doesn't work correctly with PipeWire,
+    so we prefer 'pulse' if available.
+
+    Returns:
+        Device index, name, or None to use system default.
+    """
+    import sys
+
+    if sys.platform != "linux":
+        return None  # Use system default on macOS/Windows
+
+    # On Linux, try to find a working device
+    try:
+        devices = sd.query_devices()
+        # Prefer 'pulse' device on Linux (works better with PipeWire)
+        for i, dev in enumerate(devices):
+            if dev["max_input_channels"] > 0 and "pulse" in dev["name"].lower():
+                log.debug("Using pulse device [%d] on Linux", i)
+                return i
+    except Exception as e:
+        log.warning("Error querying devices: %s", e)
+
+    return None  # Fall back to system default
+
+
 class AudioCapture:
     """Captures audio from the microphone in chunks for streaming transcription.
 
@@ -38,22 +66,25 @@ class AudioCapture:
         sample_rate: int = SAMPLE_RATE,
         chunk_duration: float = CHUNK_DURATION,
         streaming_mode: bool = False,
+        device: int | str | None = None,
     ) -> None:
         self.sample_rate = sample_rate
         self.chunk_duration = chunk_duration
         self.chunk_samples = int(sample_rate * chunk_duration)
         self.streaming_mode = streaming_mode
+        self.device = device if device is not None else _get_default_device()
         self.audio_queue: queue.Queue[NDArray[np.float32]] = queue.Queue()
         self.buffer: list[NDArray[np.float32]] = []
         self.stream: sd.InputStream | None = None
         self._callback_count = 0
 
         log.debug(
-            "AudioCapture initialized: sample_rate=%d, chunk_duration=%.1fs, chunk_samples=%d, streaming_mode=%s",
+            "AudioCapture initialized: sample_rate=%d, chunk_duration=%.1fs, chunk_samples=%d, streaming_mode=%s, device=%s",
             sample_rate,
             chunk_duration,
             self.chunk_samples,
             streaming_mode,
+            self.device,
         )
 
     def _callback(
@@ -132,6 +163,7 @@ class AudioCapture:
             log.debug("Cleared %d old chunks from queue", cleared)
 
         self.stream = sd.InputStream(
+            device=self.device,
             samplerate=self.sample_rate,
             channels=CHANNELS,
             dtype=AUDIO_DTYPE,

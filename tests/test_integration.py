@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 import time
 from unittest.mock import MagicMock, patch
 
@@ -52,20 +53,21 @@ class TestAudioTranscriptionPipeline:
 
 
 @pytest.mark.integration
-class TestTextInsertionFallback:
-    """Integration tests for text insertion with fallback."""
+@pytest.mark.skipif(sys.platform != "darwin", reason="macOS-specific tests")
+class TestTextInsertionFallbackDarwin:
+    """Integration tests for text insertion with fallback on macOS."""
 
     def test_clipboard_fallback_preserves_state(self) -> None:
         """Clipboard fallback should preserve original clipboard."""
-        with patch("vox.insert.AXIsProcessTrusted") as mock_trusted:
+        with patch("vox.insert_darwin.AXIsProcessTrusted") as mock_trusted:
             mock_trusted.return_value = False
-            with patch("vox.insert.subprocess") as mock_subprocess:
-                with patch("vox.insert.pyperclip") as mock_pyperclip:
+            with patch("vox.insert_darwin.subprocess") as mock_subprocess:
+                with patch("vox.insert_darwin.pyperclip") as mock_pyperclip:
                     # Setup mock
                     mock_pyperclip.paste.return_value = "original clipboard"
                     mock_subprocess.run.return_value = MagicMock()
 
-                    from vox.insert import TextInserter
+                    from vox.insert_darwin import TextInserter
 
                     inserter = TextInserter()
                     inserter.insert("new text")
@@ -76,6 +78,38 @@ class TestTextInsertionFallback:
                     assert len(copy_calls) == 2
                     assert copy_calls[0][0][0] == "new text"
                     assert copy_calls[1][0][0] == "original clipboard"
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(sys.platform != "linux", reason="Linux-specific tests")
+class TestTextInsertionFallbackLinux:
+    """Integration tests for text insertion with fallback on Linux."""
+
+    def test_clipboard_fallback_preserves_state(self) -> None:
+        """Clipboard fallback should preserve original clipboard."""
+        with patch.dict("os.environ", {"XDG_SESSION_TYPE": "x11"}):
+            with patch("shutil.which") as mock_which:
+                # No xdotool available, forces clipboard fallback
+                mock_which.return_value = None
+                with patch("subprocess.run") as mock_subprocess:
+                    with patch("vox.insert_linux.pyperclip") as mock_pyperclip:
+                        with patch("vox.insert_linux.time"):
+                            # Setup mock
+                            mock_pyperclip.paste.return_value = "original clipboard"
+                            mock_subprocess.return_value = MagicMock(returncode=0)
+
+                            from vox.insert_linux import TextInserter
+
+                            inserter = TextInserter()
+                            inserter.insert("new text")
+
+                            # Verify clipboard was saved
+                            mock_pyperclip.paste.assert_called()
+                            # Verify original was restored (last call should be restore)
+                            copy_calls = mock_pyperclip.copy.call_args_list
+                            assert len(copy_calls) >= 2
+                            assert copy_calls[0][0][0] == "new text"
+                            assert copy_calls[-1][0][0] == "original clipboard"
 
 
 @pytest.mark.integration
@@ -145,17 +179,18 @@ class TestHotkeyModes:
 
 
 @pytest.mark.integration
-class TestAppLifecycle:
-    """Integration tests for app lifecycle."""
+@pytest.mark.skipif(sys.platform != "darwin", reason="macOS-specific tests")
+class TestAppLifecycleDarwin:
+    """Integration tests for app lifecycle on macOS."""
 
     def test_app_initialization(self) -> None:
         """App should initialize with correct defaults."""
-        with patch("vox.app.get_transcriber"):
-            with patch("vox.app.is_streaming_backend", return_value=False):
-                with patch("vox.app.AudioCapture"):
-                    with patch("vox.app.TextInserter"):
-                        with patch("vox.app.HotkeyManager"):
-                            from vox.app import VoxApp
+        with patch("vox.app_darwin.get_transcriber"):
+            with patch("vox.app_darwin.is_streaming_backend", return_value=False):
+                with patch("vox.app_darwin.AudioCapture"):
+                    with patch("vox.app_darwin.TextInserter"):
+                        with patch("vox.app_darwin.HotkeyManager"):
+                            from vox.app_darwin import VoxApp
 
                             app = VoxApp()
 
@@ -165,12 +200,12 @@ class TestAppLifecycle:
 
     def test_start_stop_recording(self) -> None:
         """Start and stop recording should update state correctly."""
-        with patch("vox.app.get_transcriber") as mock_get_transcriber:
-            with patch("vox.app.is_streaming_backend", return_value=False):
-                with patch("vox.app.AudioCapture") as mock_audio:
-                    with patch("vox.app.TextInserter") as mock_inserter:
-                        with patch("vox.app.HotkeyManager") as mock_hotkeys:
-                            from vox.app import VoxApp
+        with patch("vox.app_darwin.get_transcriber") as mock_get_transcriber:
+            with patch("vox.app_darwin.is_streaming_backend", return_value=False):
+                with patch("vox.app_darwin.AudioCapture") as mock_audio:
+                    with patch("vox.app_darwin.TextInserter") as mock_inserter:
+                        with patch("vox.app_darwin.HotkeyManager") as mock_hotkeys:
+                            from vox.app_darwin import VoxApp
                             from vox.hotkeys import RecordingMode
 
                             app = VoxApp()
@@ -194,12 +229,12 @@ class TestAppLifecycle:
 
     def test_cancel_recording(self) -> None:
         """Cancel should stop without processing remaining audio."""
-        with patch("vox.app.get_transcriber") as mock_get_transcriber:
-            with patch("vox.app.is_streaming_backend", return_value=False):
-                with patch("vox.app.AudioCapture") as mock_audio:
-                    with patch("vox.app.TextInserter") as mock_inserter:
-                        with patch("vox.app.HotkeyManager") as mock_hotkeys:
-                            from vox.app import VoxApp
+        with patch("vox.app_darwin.get_transcriber") as mock_get_transcriber:
+            with patch("vox.app_darwin.is_streaming_backend", return_value=False):
+                with patch("vox.app_darwin.AudioCapture") as mock_audio:
+                    with patch("vox.app_darwin.TextInserter") as mock_inserter:
+                        with patch("vox.app_darwin.HotkeyManager") as mock_hotkeys:
+                            from vox.app_darwin import VoxApp
                             from vox.hotkeys import RecordingMode
 
                             # Setup mocks - make audio capture not return remaining audio
@@ -219,3 +254,81 @@ class TestAppLifecycle:
                             assert "Cancelled" in app.status_item.title
                             # Stop was called on audio capture
                             mock_audio.return_value.stop.assert_called()
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(sys.platform != "linux", reason="Linux-specific tests")
+class TestAppLifecycleLinux:
+    """Integration tests for app lifecycle on Linux."""
+
+    def test_app_initialization(self) -> None:
+        """App should initialize with correct defaults."""
+        with patch("vox.app_linux.get_transcriber"):
+            with patch("vox.app_linux.is_streaming_backend", return_value=False):
+                with patch("vox.app_linux.AudioCapture"):
+                    with patch("vox.app_linux.TextInserter"):
+                        with patch("vox.app_linux.HotkeyManager"):
+                            with patch("vox.app_linux.pystray"):
+                                from vox.app_linux import VoxApp
+
+                                app = VoxApp()
+
+                                assert app.recording is False
+                                assert app.transcription_thread is None
+
+    def test_start_stop_recording(self) -> None:
+        """Start and stop recording should update state correctly."""
+        with patch("vox.app_linux.get_transcriber") as mock_get_transcriber:
+            with patch("vox.app_linux.is_streaming_backend", return_value=False):
+                with patch("vox.app_linux.AudioCapture") as mock_audio:
+                    with patch("vox.app_linux.TextInserter") as mock_inserter:
+                        with patch("vox.app_linux.HotkeyManager") as mock_hotkeys:
+                            with patch("vox.app_linux.pystray"):
+                                from vox.app_linux import VoxApp
+                                from vox.hotkeys import RecordingMode
+
+                                app = VoxApp()
+                                app._init_components()
+
+                                # Set up hotkey manager mock
+                                app.hotkey_manager.current_mode = RecordingMode.LATCH
+
+                                # Start recording
+                                app.start_recording()
+
+                                assert app.recording is True
+                                mock_audio.return_value.start.assert_called()
+
+                                # Stop recording
+                                app.stop_recording()
+
+                                assert app.recording is False
+                                mock_audio.return_value.stop.assert_called()
+
+    def test_cancel_recording(self) -> None:
+        """Cancel should stop without processing remaining audio."""
+        with patch("vox.app_linux.get_transcriber") as mock_get_transcriber:
+            with patch("vox.app_linux.is_streaming_backend", return_value=False):
+                with patch("vox.app_linux.AudioCapture") as mock_audio:
+                    with patch("vox.app_linux.TextInserter") as mock_inserter:
+                        with patch("vox.app_linux.HotkeyManager") as mock_hotkeys:
+                            with patch("vox.app_linux.pystray"):
+                                from vox.app_linux import VoxApp
+                                from vox.hotkeys import RecordingMode
+
+                                # Setup mocks - make audio capture not return remaining audio
+                                mock_audio.return_value.stop.return_value = None
+                                mock_audio.return_value.get_chunk.return_value = None
+
+                                app = VoxApp()
+                                app._init_components()
+
+                                app.hotkey_manager.current_mode = RecordingMode.TOGGLE
+                                app.start_recording()
+
+                                # Immediately cancel (before any chunks are processed)
+                                app.cancel_recording()
+
+                                assert app.recording is False
+                                # Stop was called on audio capture
+                                mock_audio.return_value.stop.assert_called()

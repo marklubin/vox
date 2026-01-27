@@ -156,6 +156,7 @@ class TestHotkeyManager:
         callbacks["stop"].assert_called_once()
         assert hotkey_manager.recording is False
 
+    @pytest.mark.skip(reason="Escape key cancel was removed in commit 1802937")
     def test_escape_cancels(self, hotkey_manager, callbacks, mock_key) -> None:
         """Escape should cancel active recording."""
         # Start recording via double-tap

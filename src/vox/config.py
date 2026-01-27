@@ -50,7 +50,7 @@ MIC_OFF_ICON = ASSETS_DIR / "mic_off.png"
 
 # Audio settings
 SAMPLE_RATE = 16000  # Hz - required by Moonshine
-CHUNK_DURATION = 2.0  # seconds - balance between latency and quality
+CHUNK_DURATION = 1.0  # seconds - balance between latency and quality
 CHANNELS = 1  # mono
 AUDIO_DTYPE = "float32"
 BLOCK_SIZE = 1024  # samples per callback
