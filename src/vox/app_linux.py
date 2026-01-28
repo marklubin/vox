@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import queue
+import subprocess
 import threading
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -11,7 +12,7 @@ import pystray
 from PIL import Image, ImageDraw
 
 from .audio import AudioCapture
-from .config import MIC_OFF_ICON, MIC_ON_ICON, MIN_AUDIO_SAMPLES, get_logger
+from .config import LOG_FILE, MIN_AUDIO_SAMPLES, get_logger
 from .hotkeys import HotkeyManager, RecordingMode
 from .insert import TextInserter
 from .transcribe import get_streaming_transcriber, get_transcriber, is_streaming_backend
@@ -22,52 +23,52 @@ if TYPE_CHECKING:
 log = get_logger("app")
 
 
-def _create_icon_image(recording: bool = False) -> Image.Image:
-    """Create a simple icon image.
-
-    Args:
-        recording: If True, create a red recording icon. Otherwise, create a gray mic icon.
-
-    Returns:
-        PIL Image for the system tray icon.
-    """
-    # Create a 64x64 image
+def _create_recording_icon() -> Image.Image:
+    """Create a red circle icon for recording state."""
     size = 64
     image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
-
-    if recording:
-        # Red circle for recording
-        draw.ellipse([8, 8, size - 8, size - 8], fill=(255, 0, 0, 255))
-    else:
-        # Gray microphone shape
-        color = (128, 128, 128, 255)
-        # Microphone body (rounded rectangle approximation)
-        draw.ellipse([20, 8, 44, 40], fill=color)
-        draw.rectangle([20, 24, 44, 36], fill=color)
-        # Microphone stand
-        draw.rectangle([30, 36, 34, 48], fill=color)
-        draw.rectangle([22, 48, 42, 52], fill=color)
-
+    draw.ellipse([8, 8, size - 8, size - 8], fill=(255, 0, 0, 255))
     return image
 
 
-def _load_icon(path: Path, recording: bool = False) -> Image.Image:
-    """Load icon from file or create a fallback.
+def _load_system_microphone_icon() -> Image.Image | None:
+    """Try to load the system microphone icon."""
+    icon_paths = [
+        "/usr/share/icons/hicolor/48x48/devices/audio-input-microphone.png",
+        "/usr/share/icons/hicolor/64x64/devices/audio-input-microphone.png",
+        "/usr/share/icons/HighContrast/48x48/devices/audio-input-microphone.png",
+        "/usr/share/icons/Adwaita/48x48/devices/audio-input-microphone.png",
+    ]
+    for path in icon_paths:
+        p = Path(path)
+        if p.exists():
+            try:
+                return Image.open(p).resize((64, 64), Image.Resampling.LANCZOS)
+            except Exception as e:
+                log.warning("Could not load icon %s: %s", path, e)
+    return None
 
-    Args:
-        path: Path to the icon file.
-        recording: Whether this is for recording state (for fallback).
 
-    Returns:
-        PIL Image for the icon.
-    """
-    if path.exists():
-        try:
-            return Image.open(path)
-        except Exception as e:
-            log.warning("Could not load icon %s: %s", path, e)
-    return _create_icon_image(recording)
+def _create_fallback_mic_icon() -> Image.Image:
+    """Create a simple microphone icon as fallback."""
+    size = 64
+    image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(image)
+    color = (128, 128, 128, 255)
+    draw.ellipse([20, 8, 44, 40], fill=color)
+    draw.rectangle([20, 24, 44, 36], fill=color)
+    draw.rectangle([30, 36, 34, 48], fill=color)
+    draw.rectangle([22, 48, 42, 52], fill=color)
+    return image
+
+
+def _load_idle_icon() -> Image.Image:
+    """Load the idle (not recording) icon."""
+    icon = _load_system_microphone_icon()
+    if icon:
+        return icon
+    return _create_fallback_mic_icon()
 
 
 class VoxApp:
@@ -91,8 +92,8 @@ class VoxApp:
         self._use_streaming = False
 
         # Load icons
-        self._icon_off = _load_icon(MIC_OFF_ICON, recording=False)
-        self._icon_on = _load_icon(MIC_ON_ICON, recording=True)
+        self._icon_off = _load_idle_icon()
+        self._icon_on = _create_recording_icon()
 
         # Create system tray icon
         self.icon = pystray.Icon(
@@ -122,6 +123,7 @@ class VoxApp:
                 enabled=False,
             ),
             pystray.Menu.SEPARATOR,
+            pystray.MenuItem("Open Logs", self._open_logs),
             pystray.MenuItem("Quit Vox", self._quit_app),
         )
 
@@ -458,6 +460,14 @@ class VoxApp:
                 log.error("Error in streaming audio loop: %s", e, exc_info=True)
 
         log.info("Streaming audio loop ended (sent %d blocks)", blocks_sent)
+
+    def _open_logs(self, icon: pystray.Icon | None = None, item: pystray.MenuItem | None = None) -> None:
+        """Open the log file with the default application."""
+        log.info("Opening log file: %s", LOG_FILE)
+        try:
+            subprocess.Popen(["xdg-open", str(LOG_FILE)])
+        except Exception as e:
+            log.error("Failed to open log file: %s", e)
 
     def _quit_app(self, icon: pystray.Icon | None = None, item: pystray.MenuItem | None = None) -> None:
         """Clean up and quit the app."""

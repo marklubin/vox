@@ -7,7 +7,11 @@ from pathlib import Path
 
 # Logging setup
 LOG_LEVEL = os.environ.get("VOX_LOG_LEVEL", "INFO").upper()
-LOG_FILE = os.environ.get("VOX_LOG_FILE", "")
+
+# Default log file location (XDG standard)
+_default_log_dir = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / "vox"
+_default_log_dir.mkdir(parents=True, exist_ok=True)
+LOG_FILE = Path(os.environ.get("VOX_LOG_FILE", _default_log_dir / "vox.log"))
 
 # Create logger
 logger = logging.getLogger("vox")
@@ -24,11 +28,10 @@ console_handler = logging.StreamHandler(sys.stderr)
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
-# Optional file handler
-if LOG_FILE:
-    file_handler = logging.FileHandler(LOG_FILE)
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
+# File handler (always enabled)
+file_handler = logging.FileHandler(LOG_FILE)
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
 
 
 def get_logger(name: str) -> logging.Logger:

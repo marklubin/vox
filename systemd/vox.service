@@ -1,0 +1,16 @@
+[Unit]
+Description=Vox Dictation Service
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/vox/.venv/bin/python %h/vox/launcher.py
+Restart=on-failure
+RestartSec=3
+Environment=DISPLAY=:0
+Environment=XDG_RUNTIME_DIR=/run/user/%U
+Environment=VOX_TRANSCRIBER=deepgram-streaming
+EnvironmentFile=%h/.config/vox.env
+
+[Install]
+WantedBy=default.target
